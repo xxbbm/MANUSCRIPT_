@@ -1,0 +1,19 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// The runtime now stores MANUSCRIPT state in a compact jsonb row so it can run
+// both locally and on Vercel without a broad ORM migration. This Prisma schema
+// documents the deployed Postgres shape and leaves room for later normalization.
+model ManuscriptState {
+  id        String   @id
+  data      Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("manuscript_state")
+}
