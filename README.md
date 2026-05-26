@@ -1,17 +1,73 @@
 # MANUSCRIPT_
 
-MANUSCRIPT_ 是一个极简 AI 对话网站，已改造为 Next.js 前后端应用。浏览器只负责界面和同源请求，所有模型 API Key 都由服务端读取，不会暴露到前端代码、`public/` 目录或浏览器 localStorage。
+MANUSCRIPT_ 是一个为安静对话而设计的 AI 书信空间。
 
-## 功能
+它不像传统聊天工具那样追求效率、按钮和信息密度，而是把一次对话处理成一封慢慢抵达的信。界面收起大多数噪音，只留下文字、留白、时间和一个可以被反复命名的收信人。
 
-- Next.js App Router 页面与 API Routes
-- 服务端 AI 代理：`/api/chat` 统一转发模型请求
-- SSE 流式输出
-- 支持 OpenAI-compatible、Anthropic、Gemini 风格接口
-- DeepSeek reasoning 内容独立显示
-- 服务端记忆与偏好存储
-- Vercel / serverless 部署适配
-- 有 `DATABASE_URL` 时使用 Postgres；本地没有数据库时 fallback 到 `data/db.json`
+## 产品理念
+
+MANUSCRIPT_ 的出发点很简单：AI 对话不一定总要像工作台，也可以像一张纸。
+
+在这里，模型不是被包装成一个无所不能的助手，而是一个被放进文字关系里的回应者。用户可以为每个收信人设定语气、边界和称呼，也可以在不同主题之间切换，让同一段对话呈现出不同的情绪距离。
+
+它关心的不是“更快完成任务”，而是：
+
+- 让对话有可停留的质感
+- 让 AI 的回应不打断人的情绪节奏
+- 让界面退到文字之后
+- 让记忆成为轻微的连续性，而不是过度侵入的画像
+- 让模型能力留在后端，避免 API Key 暴露到浏览器
+
+## 体验特征
+
+- **书信式对话**：每个聊天对象都像一位收信人，而不是普通会话窗口。
+- **极简视觉语言**：低干扰排版、留白、慢节奏动画和文学化字体。
+- **多种氛围主题**：原生文艺主题、iMessage 仿真、微信仿真。
+- **中英文界面**：可在中文与英文之间切换。
+- **可配置收信人**：为不同 AI 收信人设置名字、模型和 persona。
+- **流式回信**：通过 SSE 展示逐步生成的回应。
+- **Reasoning 独立显示**：DeepSeek reasoning 内容不会混入普通气泡。
+- **记忆与偏好**：服务端保存对话记忆、用户偏好和收信人状态。
+- **模型节点管理**：支持 DeepSeek、MIMO、GPT、Claude、Gemini 以及服务端自定义节点。
+
+## 安全设计
+
+MANUSCRIPT_ 的模型调用发生在后端。浏览器只请求同源 API，不直接接触真实模型 Key。
+
+核心原则：
+
+- 真实 API Key 只放在服务器 `.env` 或 Vercel Environment Variables
+- 前端不会保存模型 API Key
+- 自定义模型只保存环境变量前缀，不保存用户密钥
+- 服务端可通过 `MANUSCRIPT_API_TOKEN` 限制公网访问
+- 自定义端点带有基础 SSRF 防护和 allowlist 配置
+
+## 技术实现
+
+- Next.js App Router
+- Server Route Handlers
+- SSE streaming
+- Postgres / JSON fallback 数据层
+- Prisma Postgres / Vercel / Neon / Supabase 兼容
+- OpenAI-compatible、Anthropic、Gemini provider adapter
+
+有 `DATABASE_URL` 时，服务端使用 Postgres 持久化数据；本地开发未配置数据库时，会 fallback 到 `data/db.json`。
+
+## 部署
+
+项目可以部署到 Vercel。生产环境建议配置：
+
+```env
+DATABASE_URL=...
+MANUSCRIPT_API_TOKEN=...
+DEEPSEEK_V4_PRO_ENDPOINT=https://api.deepseek.com
+DEEPSEEK_V4_PRO_API_KEY=...
+DEEPSEEK_V4_PRO_MODEL=deepseek-reasoner
+DEEPSEEK_V4_PRO_REASONING_MODEL=deepseek-reasoner
+ALLOWED_CUSTOM_ENDPOINT_HOSTS=api.deepseek.com,token-plan-cn.xiaomimimo.com,generativelanguage.googleapis.com,api.openai.com
+```
+
+不要给模型 Key 添加 `NEXT_PUBLIC_` 前缀。
 
 ## 本地运行
 
@@ -27,153 +83,6 @@ npm run dev
 http://localhost:3000
 ```
 
-生产构建：
+## 状态
 
-```bash
-npm run build
-npm run start
-```
-
-## Vercel 部署
-
-在 Vercel 导入 GitHub 仓库后，构建设置保持默认即可：
-
-```text
-Framework Preset: Next.js
-Build Command: npm run build
-Output Directory: Next.js default
-Install Command: default
-```
-
-建议创建 Prisma Postgres / Vercel Postgres / Neon / Supabase Postgres，并确保项目环境变量里有：
-
-```env
-DATABASE_URL=postgres://...
-```
-
-首次请求时服务端会自动创建 `manuscript_state` 表。
-
-## 必填环境变量
-
-至少配置一个可用模型。以 DeepSeek 为例：
-
-```env
-DATABASE_URL=你的 Postgres 连接串
-MANUSCRIPT_API_TOKEN=一串很长的随机字符串
-
-DEEPSEEK_V4_PRO_ENDPOINT=https://api.deepseek.com
-DEEPSEEK_V4_PRO_API_KEY=你的 DeepSeek API Key
-DEEPSEEK_V4_PRO_MODEL=deepseek-reasoner
-DEEPSEEK_V4_PRO_REASONING_MODEL=deepseek-reasoner
-
-ALLOWED_CUSTOM_ENDPOINT_HOSTS=api.deepseek.com,token-plan-cn.xiaomimimo.com,generativelanguage.googleapis.com,api.openai.com
-```
-
-其他模型按需配置：
-
-```env
-MIMO_V2_5_PRO_ENDPOINT=https://token-plan-cn.xiaomimimo.com/v1
-MIMO_V2_5_PRO_API_KEYS=
-MIMO_V2_5_PRO_MODEL=mimo-v2.5-pro
-
-GPT_5_4_ENDPOINT=https://api.apikey.fun
-GPT_5_4_API_KEY=
-GPT_5_4_MODEL=gpt-5.4
-
-CLAUDE_OPUS_4_6_ENDPOINT=https://api.apikey.fun
-CLAUDE_OPUS_4_6_API_KEY=
-CLAUDE_OPUS_4_6_MODEL=claude-opus-4-6
-
-GEMINI_ENDPOINT=https://generativelanguage.googleapis.com
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-pro
-```
-
-不要给模型 Key 加 `NEXT_PUBLIC_` 前缀。带 `NEXT_PUBLIC_` 的变量会进入前端。
-
-## 访问保护
-
-公网部署建议设置：
-
-```env
-MANUSCRIPT_API_TOKEN=一串很长的随机字符串
-```
-
-设置后，浏览器需要在 localStorage 里保存同一个 token 才能调用后端 API。打开网站后，在浏览器 Console 执行：
-
-```js
-localStorage.setItem('manuscript.apiToken', '这里填 MANUSCRIPT_API_TOKEN')
-location.reload()
-```
-
-如果只自己本地使用，可以不设置 `MANUSCRIPT_API_TOKEN`。公网使用建议一定设置。
-
-## 自定义模型
-
-前端自定义模型不会保存用户 API Key。它只保存环境变量前缀，例如：
-
-```text
-CUSTOM_OPENAI
-```
-
-服务端会读取：
-
-```env
-CUSTOM_OPENAI_ENDPOINT=https://api.openai.com
-CUSTOM_OPENAI_API_KEY=sk-...
-CUSTOM_OPENAI_MODEL=gpt-4.1
-```
-
-也支持轮换 Key：
-
-```env
-CUSTOM_OPENAI_API_KEYS=key1,key2,key3
-```
-
-## 常见问题
-
-### Vercel 报 No Next.js version detected
-
-通常是 Vercel 部署的分支不是包含 `package.json` 的分支，或 Root Directory 设置错了。确认项目部署的是包含 `package.json`、`app/`、`src/` 的 `main` 分支。
-
-### 页面能打开，但发消息一直转
-
-先看 Vercel Logs 的 `/api/chat`：
-
-- `401 Unauthorized`：浏览器没有设置 `manuscript.apiToken`，或 token 不一致。
-- `missing server API key`：对应模型的环境变量没填。
-- `Model request failed (429)`：模型供应商额度不足或限流。
-- Postgres / `DATABASE_URL` 报错：数据库连接串或数据库服务有问题。
-
-### Gemini 返回 429 quota exceeded
-
-这不是代码问题，是 Gemini 账号额度或 billing 问题。可以：
-
-- 在界面里切换到 `DeepSeek-v4-Pro`
-- 或去 Google AI Studio / Google Cloud 检查 Gemini API quota 和 billing
-
-如果之前浏览器保存了 Gemini 作为当前模型，可以在 Console 里切回 DeepSeek：
-
-```js
-const saved = JSON.parse(localStorage.getItem('manuscript.v2.state') || '{}')
-if (Array.isArray(saved.nodes)) {
-  saved.nodes.forEach(node => {
-    const name = Array.isArray(node.name) ? node.name[1] : node.name
-    node.active = name === 'DeepSeek-v4-Pro'
-  })
-}
-if (saved.convos) {
-  Object.values(saved.convos).forEach(convo => {
-    convo.model = 'DeepSeek-v4-Pro'
-  })
-}
-localStorage.setItem('manuscript.v2.state', JSON.stringify(saved))
-location.reload()
-```
-
-## 安全提醒
-
-- 不要提交 `.env`、`data/db.json` 或任何真实 API Key。
-- 所有真实模型 Key 只放在服务器 `.env` 或 Vercel Environment Variables。
-- Vercel / serverless 部署请设置 `DATABASE_URL`，否则后端记忆数据不能可靠持久化。
-- 当前数据库是全站共享状态；如果要开放给很多人使用，建议继续增加登录、用户隔离、配额和速率限制。
+MANUSCRIPT_ 目前更适合个人使用、小范围分享和原型部署。若要开放给大量用户，后续需要继续加入正式账号系统、用户隔离、配额、速率限制和更完整的运营后台。
