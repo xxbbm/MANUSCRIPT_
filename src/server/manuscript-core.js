@@ -55,8 +55,8 @@ function authorizeRequest(request) {
   return jsonResponse({ error: 'Unauthorized' }, 401);
 }
 
-function sendSseWeb(writer, encoder, event, data) {
-  return writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+function sendSseWeb(streamController, encoder, event, data) {
+  streamController.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
 }
 
 async function handleChatRequest(request) {
@@ -123,19 +123,18 @@ async function handleChatRequest(request) {
 
   const stream = new ReadableStream({
     async start(streamController) {
-      const writer = streamController;
       let upstreamResponse = null;
       try {
-        await sendSseWeb(writer, encoder, 'meta', { conversationId, model: modelName, messageId: assistantMessage.id });
+        sendSseWeb(streamController, encoder, 'meta', { conversationId, model: modelName, messageId: assistantMessage.id });
         await streamProvider(requestConfig, apiKey, promptSnapshot.systemPrompt, promptSnapshot.providerMessages, controller.signal, {
           setResponse(response) { upstreamResponse = response; },
-          reasoning(delta) { assistantMessage.reasoningContent += delta; return sendSseWeb(writer, encoder, 'reasoning', { text: delta }); },
-          content(delta) { assistantMessage.content += delta; return sendSseWeb(writer, encoder, 'content', { text: delta }); },
+          reasoning(delta) { assistantMessage.reasoningContent += delta; sendSseWeb(streamController, encoder, 'reasoning', { text: delta }); },
+          content(delta) { assistantMessage.content += delta; sendSseWeb(streamController, encoder, 'content', { text: delta }); },
         });
         assistantMessage.status = 'complete';
         await persistAssistantMessage(conversationId, assistantMessage);
         await maybeCreateMemory(userId, conversationId, latestUser?.content || '', assistantMessage.content);
-        await sendSseWeb(writer, encoder, 'done', { messageId: assistantMessage.id });
+        sendSseWeb(streamController, encoder, 'done', { messageId: assistantMessage.id });
       } catch (err) {
         if (controller.signal.aborted || request.signal.aborted) {
           assistantMessage.status = 'interrupted';
@@ -146,7 +145,7 @@ async function handleChatRequest(request) {
           console.error('[chat] stream failed:', err);
           assistantMessage.status = 'error';
           await persistAssistantMessage(conversationId, assistantMessage);
-          await sendSseWeb(writer, encoder, 'error', { error: err.message || 'Model request failed' });
+          sendSseWeb(streamController, encoder, 'error', { error: err.message || 'Model request failed' });
         }
       } finally {
         request.signal.removeEventListener('abort', abort);
